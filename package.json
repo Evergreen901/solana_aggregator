@@ -1,0 +1,21 @@
+{
+  "name": "solana_aggregator",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "ts-node index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@solana/web3.js": "^1.66.1",
+    "http": "^0.0.1-security",
+    "mongoose": "^6.6.5",
+    "ws": "^8.9.0"
+  },
+  "devDependencies": {
+    "typescript": "^4.8.4"
+  }
+}

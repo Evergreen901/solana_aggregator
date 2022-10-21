@@ -6,6 +6,7 @@ import { Schema, model, connect } from 'mongoose';
 const RPC_HTTPS = "https://api.mainnet-beta.solana.com/";
 const RPC_WS = "wss://api.mainnet-beta.solana.com/";
 const LAMPORTS_PER_SOL = 1e9;
+const MONGODB_CONNECTION_STRING = 'mongodb://localhost:27017/test';
 
 // websocket stuff
 interface ExtWebSocket extends WebSocket {
@@ -62,7 +63,7 @@ const connection = new Connection(RPC_HTTPS, {
 console.log("Server started");
 
 (async () => {
-  await connect('mongodb://localhost:27017/test');
+  await connect(MONGODB_CONNECTION_STRING);
 
   // Register a callback to listen to the wallet (ws subscription)
   try {
@@ -80,18 +81,101 @@ console.log("Server started");
 // Transaction getter
 const newTransProcessing = (logData: any) => {
   try {
-    if (
+    if ( // Listing
       logData.logs.includes("Program log: Instruction: Sell") &&
       logData.logs.includes("Program M2mx93ekt1fmXSVkTrUL9xVFHkmME8HTUi5Cyc5aF7K success")
     ) {
-      signatureGetter(logData, logData.signature);
+      processTransLog(logData, logData.signature, 'Listing');
+    } else if ( // Sale
+      logData.logs.includes("Program log: Instruction: Deposit") &&
+      logData.logs.includes("Program log: Instruction: Buy") &&
+      logData.logs.includes("Program log: Instruction: ExecuteSale") &&
+      logData.logs.includes("Program M2mx93ekt1fmXSVkTrUL9xVFHkmME8HTUi5Cyc5aF7K success")
+    ) {
+      processTransLog(logData, logData.signature, 'Sale');
+    } else if ( // Place Bid
+      logData.logs.includes("Program log: Instruction: Buy") &&
+      logData.logs.includes("Program M2mx93ekt1fmXSVkTrUL9xVFHkmME8HTUi5Cyc5aF7K success")
+    ) {
+      processTransLog(logData, logData.signature, 'Place Bid');
+    } else if ( // Cancel Listing
+      logData.logs.includes("Program log: Instruction: CancelSell") &&
+      logData.logs.includes("Program log: Instruction: SetAuthority") &&
+      logData.logs.includes("Program M2mx93ekt1fmXSVkTrUL9xVFHkmME8HTUi5Cyc5aF7K success")
+    ) {
+      processTransLog(logData, logData.signature, 'Cancel Listing');
+    } else if ( // Cancel Bid
+      logData.logs.includes("Program log: Instruction: CancelBuy") &&
+      logData.logs.includes("Program M2mx93ekt1fmXSVkTrUL9xVFHkmME8HTUi5Cyc5aF7K success")
+    ) {
+      processTransLog(logData, logData.signature, 'Cancel Bid');
+    } else {
+      console.log('-------------------------- Unknown transaction ----------------------------');
+      console.log({signature: logData.signature});
+      for (const log of logData.logs) {
+        if (log.startsWith('Program log: Instruction: ')) {
+          console.log(log);
+        }
+      }
     }
   } catch (err) {
     console.log("ERR IN newTransProcessing: \n", err);
   }
 };
 
-const priceGetter = (logData: any, transData: any) => {
+const processTransLog = async (logData: any, sign: any, type: string) => {
+  try {
+    let transData = await connection.getTransaction(sign, {
+      commitment: "confirmed",
+    });
+    let tries = 0;
+    while (transData === null && tries < 4) {
+      transData = await connection.getTransaction(sign, {
+        commitment: "confirmed",
+      });
+      tries += 1;
+      await delay(30);
+    }
+    if (transData !== null) {
+      let MEData: any = [];
+
+      try {
+        if (type == 'Listing') {
+          MEData = logAnalyzeListing(logData, transData);
+        } else if (type == 'Sale') {
+          MEData = logAnalyzeSale(logData, transData);
+        } else if (type == 'Place Bid') {
+          MEData = logAnalyzePlaceBid(logData, transData);
+        } else if (type == 'Cancel Listing') {
+          MEData = logAnalyzeCancelListing(logData, transData);
+        } else if (type == 'Cancel Bid') {
+          MEData = logAnalyzeCancelBid(logData, transData);
+        }
+      } catch (err) {
+        MEData = [];
+        console.log("Error in LogAnalyzer");
+      }
+
+      console.log(`-------------------- ${type} --------------------`);
+      console.log({MEData});
+      console.log({LogData: logData.signature});
+
+      let newDocument = await MEDataModel.create({
+        signature: logData.signature,
+        instruction: type,
+        data: MEData,
+      });
+    
+      console.log({Saved: newDocument._id.toString()});
+    } else {
+      console.error('transData is null');
+    }
+  } catch (err) {
+    console.log({ err_from_signatureGetter: err });
+  }
+};
+
+const logAnalyzeListing = (logData: any, transData: any) => {
   if (logData.signature === transData.transaction.signatures[0]) {
     for (const element of logData.logs) {
       if (element.includes('Program log: {"price":')) {
@@ -121,47 +205,134 @@ const priceGetter = (logData: any, transData: any) => {
       }
     }
   } else {
-    console.log(`Signature mismatched: ${logData.signature}, ${transData.transaction.signatures[0]}`)
+    console.error(`Signature mismatched: ${logData.signature}, ${transData.transaction.signatures[0]}`)
   }
 
   return [];
 };
 
-const signatureGetter = async (logData: any, sign: any /* , tiemrStart */) => {
-  try {
-    let transData = await connection.getTransaction(sign, {
-      commitment: "confirmed",
-    });
-    let tries = 0;
-    while (transData === null && tries < 4) {
-      transData = await connection.getTransaction(sign, {
-        commitment: "confirmed",
-      });
-      tries += 1;
-      await delay(30);
-    }
-    if (transData !== null) {
-      let MEData: any = [];
+const logAnalyzeSale = (logData: any, transData: any) => {
+  if (logData.signature === transData.transaction.signatures[0]) {
+    for (const element of logData.logs) {
+      if (element.includes('"seller_expiry"')) {
+        const parsedDict = JSON.parse(element.split("Program log: ")[1]);
+        const indexMap = transData.transaction.message.instructions[2].accounts.map((a: any) =>
+          a.toString()
+        );
+        const accountKeys = transData.transaction.message.accountKeys.map((x: any) => x.toBase58());
+        const accountMapped: any = [];
 
-      try {
-        MEData = priceGetter(logData, transData);
-      } catch (err) {
-        MEData = [];
-        console.log("Error in priceGetter");
+        for (let j = 0; j < indexMap.length; j++) {
+          accountMapped[j] = accountKeys[Number(indexMap[j])];
+        }
+
+        return [
+          {
+            price: parsedDict["price"] / LAMPORTS_PER_SOL,
+            buyer_expiry: parsedDict["buyer_expiry"],
+            seller_expiry: parsedDict["seller_expiry"],
+            auctionHouse: accountMapped[9],
+            tokenAddress: accountMapped[7],
+            tokenMint: accountMapped[4],
+            buyer: accountMapped[0],
+            buyerReferral: accountMapped[8],
+            seller: accountMapped[1],
+            sellerReferral: accountMapped[14],
+          },
+        ];
       }
-
-      console.log({MEData});
-      console.log({LogData: logData.signature});
-
-      let newDocument = await MEDataModel.create({
-        signature: logData.signature,
-        instruction: 'Sell',
-        data: MEData,
-      });
-    
-      console.log({Saved: newDocument._id.toString()});
     }
-  } catch (err) {
-    console.log({ err_from_signatureGetter: err });
+  } else {
+    console.error(`Signature mismatched: ${logData.signature}, ${transData.transaction.signatures[0]}`)
   }
+
+  return [];
+};
+
+const logAnalyzePlaceBid = (logData: any, transData: any) => {
+  if (logData.signature === transData.transaction.signatures[0]) {
+    for (const element of logData.logs) {
+      if (element.includes('Program log: {"price":')) {
+        const parsedDict = JSON.parse(element.split("Program log: ")[1]);
+        const indexMap = transData.transaction.message.instructions[0].accounts.map((a: any) =>
+          a.toString()
+        );
+        const accountKeys = transData.transaction.message.accountKeys.map((x: any) => x.toBase58());
+        const accountMapped: any = [];
+
+        for (let j = 0; j < indexMap.length; j++) {
+          accountMapped[j] = accountKeys[Number(indexMap[j])];
+        }
+
+        return [
+          {
+            price: parsedDict["price"] / LAMPORTS_PER_SOL,
+            expiry: parsedDict["buyer_expiry"],
+            auctionHouse: accountMapped[6],
+            tokenMint: accountMapped[2],
+            buyer: accountMapped[0],
+            buyerReferral: accountMapped[5],
+          },
+        ];
+      }
+    }
+  } else {
+    console.error(`Signature mismatched: ${logData.signature}, ${transData.transaction.signatures[0]}`)
+  }
+
+  return [];
+};
+
+const logAnalyzeCancelListing = (logData: any, transData: any) => {
+  if (logData.signature === transData.transaction.signatures[0]) {
+    const indexMap = transData.transaction.message.instructions[0].accounts.map((a: any) =>
+      a.toString()
+    );
+    const accountKeys = transData.transaction.message.accountKeys.map((x: any) => x.toBase58());
+    const accountMapped: any = [];
+
+    for (let j = 0; j < indexMap.length; j++) {
+      accountMapped[j] = accountKeys[Number(indexMap[j])];
+    }
+
+    return [
+      {
+        auctionHouse: accountMapped[5],
+        tokenMint: accountMapped[3],
+        seller: accountMapped[0],
+        sellerReferral: accountMapped[4],
+      },
+    ];
+  } else {
+    console.error(`Signature mismatched: ${logData.signature}, ${transData.transaction.signatures[0]}`)
+  }
+
+  return [];
+};
+
+const logAnalyzeCancelBid = (logData: any, transData: any) => {
+  if (logData.signature === transData.transaction.signatures[0]) {
+    const indexMap = transData.transaction.message.instructions[0].accounts.map((a: any) =>
+      a.toString()
+    );
+    const accountKeys = transData.transaction.message.accountKeys.map((x: any) => x.toBase58());
+    const accountMapped: any = [];
+
+    for (let j = 0; j < indexMap.length; j++) {
+      accountMapped[j] = accountKeys[Number(indexMap[j])];
+    }
+
+    return [
+      {
+        auctionHouse: accountMapped[4],
+        tokenMint: accountMapped[2],
+        buyer: accountMapped[0],
+        buyerReferral: accountMapped[3],
+      },
+    ];
+  } else {
+    console.error(`Signature mismatched: ${logData.signature}, ${transData.transaction.signatures[0]}`)
+  }
+
+  return [];
 };

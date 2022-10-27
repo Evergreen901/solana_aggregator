@@ -1,4 +1,4 @@
-import { Schema, model } from 'mongoose';
+import { Schema, model, models } from 'mongoose';
 
 interface TransData {
   marketplace: string,
@@ -14,4 +14,4 @@ const dataSchema = new Schema<TransData>({
   data: { type: Array }
 });
 
-export const Transactions = model<TransData>('transactions', dataSchema);
+export const Transactions = models.transactions || model<TransData>('transactions', dataSchema);

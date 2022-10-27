@@ -1,26 +1,22 @@
 import { clusterApiUrl, Connection, PublicKey, Struct } from '@solana/web3.js';
-import { AccountLayout, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { connect } from 'mongoose';
+import { PUBLIC_KEY as ME_PUBLIC_KEY, processTrans as processMETrans } from './solana/magiceden';
+import { PUBLIC_KEY as SOLANART_PUBLIC_KEY, processTrans as processSolanartTrans } from './solana/solanart';
+import { PUBLIC_KEY as HYPERSPACE_PUBLIC_KEY, processTrans as processHyperSpaceTrans } from './solana/hyperspace';
+import { PUBLIC_KEY as OPENSEA_PUBLIC_KEY, processTrans as processOpenSeaTrans } from './solana/opeasea';
+// TODO delete
+import { AccountLayout, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { serialize, deserialize, deserializeUnchecked } from "borsh";
 import { Buffer } from "buffer";
-import { processMETrans } from './solana/magiceden';
-import { processSolanartTrans } from './solana/solanart';
-import { processHyperSpaceTrans } from './solana/hyperspace';
 
-const RPC_HTTPS = 'https://api.mainnet-beta.solana.com/';
-const RPC_WS = 'ws://api.mainnet-beta.solana.com/';
 const MONGODB_CONNECTION_STRING = 'mongodb://localhost:27017/test';
 
-const ME_PUBLIC_KEY = 'M2mx93ekt1fmXSVkTrUL9xVFHkmME8HTUi5Cyc5aF7K';
-const SOLANART_PUBLIC_KEY = 'CJsLwbP1iu5DuUikHEJnLfANgKy6stB2uFgvBBHoyxwz';
-const HYPERSPACE_PUBLIC_KEY = 'HYPERfwdTjyJ2SCaKHmpF2MtrXqWxrsotYDsTrshHWq8';
+// const connection = new Connection(RPC_HTTPS, {
+//   commitment: 'confirmed',
+//   wsEndpoint: RPC_WS,
+// });
 
-const connection = new Connection(RPC_HTTPS, {
-  commitment: 'confirmed',
-  wsEndpoint: RPC_WS
-});
-
-console.log('Server started');
+const connection = new Connection(clusterApiUrl('mainnet-beta'), 'confirmed');
 
 (async () => {
   await connect(MONGODB_CONNECTION_STRING);
@@ -44,31 +40,24 @@ console.log('Server started');
       (logSubscribe) => processHyperSpaceTrans(connection, logSubscribe?.signature),
       'confirmed',
     )
+
+    connection.onLogs(
+      new PublicKey(OPENSEA_PUBLIC_KEY),
+      (logSubscribe) => processOpenSeaTrans(connection, logSubscribe?.signature),
+      'confirmed',
+    )
   } catch(err) {
     console.log({ err });
     process.exit(0);
   }
 })();
 
-// TODO delete
-// processHyperSpaceTrans(
-//   '2WnXF2hjFhG9SYd5BiGWWCtPzpiPEkgrmKDXptmRrZgrEH6JQJvLqF4CPTyBZ4PgSRJsK7big99vN6ytDzzzfvFG'
-// );
+console.log('Aggregator running');
 
-// (async () => {
-//   console.log(clusterApiUrl('mainnet-beta'))
-//   const tokenAccounts = await new Connection(clusterApiUrl('devnet'), 'confirmed').getTokenAccountsByOwner(
-//     new PublicKey('8YLKoCu7NwqHNS8GzuvA2ibsvLrsg22YMfMDafxh1B15'),
-//     {
-//       programId: TOKEN_PROGRAM_ID,
-//     }
-//   );
-//   console.log("Token                                         Balance");
-//   tokenAccounts.value.forEach((tokenAccount) => {
-//     const accountData = AccountLayout.decode(tokenAccount.account.data);
-//     console.log(`${new PublicKey(accountData.mint)}   ${accountData.amount}`);
-//   })
-// })();
+// TODO delete
+// processOpenSeaTrans(
+//   connection, '3ctxDxbaHUpik9HuoTm9BoPwqLPUeDh8EnjdBhLdF92PF8AjMCDVqaohfmnTxSkZ5f4V8Dr9oHQgFwoiUU1swuuX'
+// );
 
 // class Primitive extends Struct {
 //   constructor(properties: any) {

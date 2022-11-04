@@ -2,6 +2,7 @@ import { Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { getTransaction } from './getTransaction';
 import { getTokenAddress } from './getTokenAddress';
 import { Transactions } from '../mongo/transactions';
+import { TransactionTypes } from './transactionTypes';
 
 const MARKETPLACE = 'HyperSpace';
 export const PUBLIC_KEY = 'HYPERfwdTjyJ2SCaKHmpF2MtrXqWxrsotYDsTrshHWq8';
@@ -21,32 +22,32 @@ export const processTrans = async (connection: Connection, signature: string) =>
       logMessages.includes('Program log: Instruction: ExecuteSale') &&
       logMessages.includes(`Program ${PUBLIC_KEY} success`)
     ) {
-      parseLog(transData, 'Sale');
+      parseLog(transData, TransactionTypes.sale);
     } else if ( // Delisting
       logMessages.includes('Program log: Instruction: Cancel') &&
       logMessages.includes('Program log: Instruction: Revoke') &&
       logMessages.includes(`Program ${PUBLIC_KEY} success`)
     ) {
-      parseLog(transData, 'Delisting');
+      parseLog(transData, TransactionTypes.cancelSell);
     } else if (
       logMessages.includes('Program log: Instruction: Sell') &&
       logMessages.includes('Program log: Instruction: Approve') &&
       logMessages.includes(`Program ${PUBLIC_KEY} success`)
     ) {
-      parseLog(transData, 'Listing');
+      parseLog(transData, TransactionTypes.sell);
     } else if (
       logMessages.includes('Program log: Instruction: Withdraw') &&
       logMessages.includes('Program log: Instruction: Cancel') &&
       logMessages.includes(`Program ${PUBLIC_KEY} success`)
     ) {
-      parseLog(transData, 'CancelOffer');
+      parseLog(transData, TransactionTypes.cancelBuy);
     } else if (
       logMessages.includes('Program log: Instruction: Deposit') &&
       logMessages.includes('Program log: Instruction: CreateTradeState') &&
       logMessages.includes('Program log: Instruction: Buy') &&
       logMessages.includes(`Program ${PUBLIC_KEY} success`)
     ) {
-      parseLog(transData, 'Offer');
+      parseLog(transData, TransactionTypes.buy);
     } else {
       console.log(
         `-------------------------- Unknown transaction type (${MARKETPLACE}) ----------------------------`
@@ -66,15 +67,15 @@ const parseLog = async (transData: any, type: string) => {
     let data: any = [];
 
     try {
-      if (type == 'Sale') {
+      if (type == TransactionTypes.sale) {
         data = parseSale(transData);
-      } else if (type == 'Delisting') {
+      } else if (type == TransactionTypes.cancelSell) {
         data = parseDelisting(transData);
-      } else if (type == 'Listing') {
+      } else if (type == TransactionTypes.sell) {
         data = await parseListing(transData);
-      } else if (type == 'CancelOffer') {
+      } else if (type == TransactionTypes.cancelBuy) {
         data = parseOfferRescinded(transData);
-      } else if (type == 'Offer') {
+      } else if (type == TransactionTypes.buy) {
         data = parseOffer(transData);
       }
     } catch (err) {

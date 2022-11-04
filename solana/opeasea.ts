@@ -2,6 +2,7 @@ import { Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { getTransaction } from './getTransaction';
 import { Transactions } from '../mongo/transactions';
 import { getTokenAddress } from './getTokenAddress';
+import { TransactionTypes } from './transactionTypes';
 
 const MARKETPLACE = 'OpenSea';
 export const PUBLIC_KEY = 'hausS13jsjafwWwGqZTUQRmWyvyxn9EQpqMwV1PBBmk';
@@ -21,19 +22,19 @@ export const processTrans = async (connection: Connection, signature: string) =>
       logMessages.includes('Program log: Instruction: Approve') &&
       logMessages.includes(`Program ${PUBLIC_KEY} success`)
     ) {
-      parseLog(transData, 'List');
+      parseLog(transData, TransactionTypes.sell);
     } else if (
       logMessages.includes('Program log: Instruction: Cancel') &&
       logMessages.includes('Program log: Instruction: WithdrawFromFee') &&
       logMessages.includes(`Program ${PUBLIC_KEY} success`)
     ) {
-      parseLog(transData, 'CancelListing');
+      parseLog(transData, TransactionTypes.cancelSell);
     } else if (
       logMessages.includes('Program log: Instruction: Buy') &&
       logMessages.includes('Program log: Instruction: ExecuteSale') &&
       logMessages.includes(`Program ${PUBLIC_KEY} success`)
     ) {
-      parseLog(transData, 'Sale');
+      parseLog(transData, TransactionTypes.sale);
     } else {
       console.log(
         `-------------------------- Unknown transaction type (${MARKETPLACE}) ----------------------------`
@@ -53,11 +54,11 @@ const parseLog = async (transData: any, type: string) => {
     let data: any = [];
 
     try {
-      if (type == 'List') {
+      if (type == TransactionTypes.sell) {
         data = await parseList(transData);
-      } else if (type == 'CancelListing') {
+      } else if (type == TransactionTypes.cancelSell) {
         data = await parseCancelListing(transData);
-      } else if (type == 'Sale') {
+      } else if (type == TransactionTypes.sale) {
         data = await parseSale(transData);
       }
     } catch (err) {

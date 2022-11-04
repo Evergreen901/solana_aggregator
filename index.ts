@@ -10,12 +10,6 @@ import { serialize, deserialize, deserializeUnchecked } from "borsh";
 import { Buffer } from "buffer";
 
 const MONGODB_CONNECTION_STRING = 'mongodb://localhost:27017/test';
-
-// const connection = new Connection(RPC_HTTPS, {
-//   commitment: 'confirmed',
-//   wsEndpoint: RPC_WS,
-// });
-
 const connection = new Connection(clusterApiUrl('mainnet-beta'), 'confirmed');
 
 (async () => {

@@ -1,6 +1,7 @@
 import { Connection, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { getTransaction } from './getTransaction';
 import { Transactions } from '../mongo/transactions';
+import { TransactionTypes } from './transactionTypes';
 
 const MARKETPLACE = 'Solanart';
 export const PUBLIC_KEY = 'CJsLwbP1iu5DuUikHEJnLfANgKy6stB2uFgvBBHoyxwz';
@@ -20,27 +21,27 @@ export const processTrans = async (connection: Connection, signature: string) =>
       logMessages.includes('Program log: Create') &&
       logMessages.includes(`Program ${PUBLIC_KEY} success`)
     ) {
-      parseLog(transData, 'Sale');
+      parseLog(transData, TransactionTypes.sale);
     } else if ( // CreateOffer
       logMessages.includes('Program log: Instruction: CreateOffer') &&
       logMessages.includes(`Program ${PUBLIC_KEY} success`)
     ) {
-      parseLog(transData, 'CreateOffer');
+      parseLog(transData, TransactionTypes.buy);
     } else if ( // Sell
       logMessages.includes('Program log: Instruction: Sell ' /* Attention: do not remove the trailing space after word 'Sell' */) &&
       logMessages.includes(`Program ${PUBLIC_KEY} success`)
     ) {
-      parseLog(transData, 'Sell');
+      parseLog(transData, TransactionTypes.sell);
     } else if ( // Buy = Unlist
       logMessages.includes('Program log: Instruction: Buy') &&
       logMessages.includes(`Program ${PUBLIC_KEY} success`)
     ) {
-      parseLog(transData, 'Buy');
+      parseLog(transData, TransactionTypes.cancelSell);
     } else if ( // Update price
       logMessages.includes('Program log: Instruction: Update price') &&
       logMessages.includes(`Program ${PUBLIC_KEY} success`)
     ) {
-      parseLog(transData, 'Update price');
+      parseLog(transData, TransactionTypes.updateBuyPrice);
     } else {
       console.log(
         `-------------------------- Unknown transaction type (${MARKETPLACE}) ----------------------------`
@@ -60,15 +61,15 @@ const parseLog = async (transData: any, type: string) => {
     let data: any = [];
 
     try {
-      if (type == 'Sale') {
+      if (type == TransactionTypes.sale) {
         data = parseSale(transData);
-      } else if (type == 'CreateOffer') {
+      } else if (type == TransactionTypes.buy) {
         data = parseCreateOffer(transData);
-      } else if (type == 'Sell') {
+      } else if (type == TransactionTypes.sell) {
         data = parseSell(transData);
-      } else if (type == 'Buy') {
+      } else if (type == TransactionTypes.cancelSell) {
         data = parseBuy(transData);
-      } else if (type == 'Update price') {
+      } else if (type == TransactionTypes.updateBuyPrice) {
         data = parseUpdatePrice(transData);
       }
     } catch (err) {
